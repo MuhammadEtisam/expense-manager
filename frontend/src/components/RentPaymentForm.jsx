@@ -18,10 +18,16 @@ const RentPaymentForm = ({ isOpen, onClose, onSuccess }) => {
     useEffect(() => {
         if (isOpen) {
             const range = getCurrentMonthRange()
+            console.log('Rent form date range:', range) // Debug log
             setDateRange(range)
+
+            // Ensure the default date is within the allowed range
+            const today = new Date().toISOString().split('T')[0]
+            const defaultDate = today <= range.max ? today : range.max
+
             setFormData({
                 amount: '',
-                date: new Date().toISOString().split('T')[0],
+                date: defaultDate,
                 note: ''
             })
             setError('')
@@ -30,6 +36,20 @@ const RentPaymentForm = ({ isOpen, onClose, onSuccess }) => {
 
     const handleChange = (e) => {
         const { name, value } = e.target
+
+        // Additional validation for date field to ensure it's within range
+        if (name === 'date') {
+            const selectedDate = new Date(value)
+            const minDate = new Date(dateRange.min)
+            const maxDate = new Date(dateRange.max)
+
+            // If selected date is outside allowed range, don't update
+            if (selectedDate < minDate || selectedDate > maxDate) {
+                setError(`Date must be within current month (${dateRange.min} to ${dateRange.max})`)
+                return
+            }
+        }
+
         setFormData(prev => ({ ...prev, [name]: value }))
         if (error) setError('')
     }
@@ -151,6 +171,10 @@ const RentPaymentForm = ({ isOpen, onClose, onSuccess }) => {
                     />
                     <p className="text-xs text-gray-500 mt-1">
                         Must be within current month ({dateRange.min} to {dateRange.max})
+                    </p>
+                    {/* Debug info - remove in production */}
+                    <p className="text-xs text-blue-600 mt-1">
+                        Debug: min="{dateRange.min}", max="{dateRange.max}"
                     </p>
                 </div>
 

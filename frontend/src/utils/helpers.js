@@ -127,13 +127,28 @@ export const checkHasRentThisMonth = (expenses) => {
 
 // Get current month date range for rent validation
 export const getCurrentMonthRange = () => {
+    // Get current date in local timezone
     const now = new Date()
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-    const today = new Date()
+
+    // Create dates without time components to avoid timezone issues
+    const year = now.getFullYear()
+    const month = now.getMonth() // 0-based (January = 0)
+    const today = now.getDate()
+
+    // First day of current month (e.g., "2024-08-01")
+    const firstDay = new Date(year, month, 1)
+    const minDate = firstDay.getFullYear() + '-' +
+        String(firstDay.getMonth() + 1).padStart(2, '0') + '-' +
+        '01'
+
+    // Today's date (e.g., "2024-08-26") 
+    const todayFormatted = year + '-' +
+        String(month + 1).padStart(2, '0') + '-' +
+        String(today).padStart(2, '0')
 
     return {
-        min: firstDay.toISOString().split('T')[0],
-        max: today.toISOString().split('T')[0]
+        min: minDate,
+        max: todayFormatted
     }
 }
 
