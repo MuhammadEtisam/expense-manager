@@ -36,7 +36,7 @@ app.use(limiter);
 // CORS configuration
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production'
-    ? ['https://your-frontend-domain.vercel.app'] // Update with your Vercel domain
+    ? ['https://expense-manager-app-rose.vercel.app'] // Update with your Vercel domain
     : ['http://localhost:3000', 'http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
