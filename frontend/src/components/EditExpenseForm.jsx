@@ -45,12 +45,12 @@ const EditExpenseForm = ({ isOpen, onClose, expense = null }) => {
         const { name, value } = e.target
         setFormData(prev => {
             const updated = { ...prev, [name]: value }
-            
+
             // Clear subcategory if category changes and is not FOOD
             if (name === 'category' && value !== 'FOOD') {
                 updated.subcategory = ''
             }
-            
+
             return updated
         })
 
@@ -77,7 +77,7 @@ const EditExpenseForm = ({ isOpen, onClose, expense = null }) => {
 
         try {
             const expenseData = {
-                amount: parseFloat(formData.amount),
+                amount: Math.round(parseFloat(formData.amount) * 100) / 100,
                 category: formData.category,
                 subcategory: formData.subcategory || null,
                 date: formData.date,

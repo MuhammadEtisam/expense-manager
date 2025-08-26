@@ -165,7 +165,7 @@ const ExpenseForm = ({ isOpen, onClose, onSuccess }) => {
             const data = {
                 date: selectedDate,
                 expenses: validation.validExpenses.map(exp => ({
-                    amount: parseFloat(exp.amount),
+                    amount: Math.round(parseFloat(exp.amount) * 100) / 100,
                     category: exp.category,
                     subcategory: exp.subcategory || null,
                     note: exp.note.trim() || null
@@ -226,15 +226,6 @@ const ExpenseForm = ({ isOpen, onClose, onSuccess }) => {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-medium text-gray-700">Expenses for {selectedDate}</h3>
-                        <button
-                            type="button"
-                            onClick={addExpenseRow}
-                            className="btn-primary btn-sm"
-                            disabled={loading}
-                        >
-                            <PlusIcon className="h-4 w-4 mr-1" />
-                            Add Row
-                        </button>
                     </div>
 
                     {expenses.map((expense, index) => (
@@ -337,6 +328,17 @@ const ExpenseForm = ({ isOpen, onClose, onSuccess }) => {
                             </div>
                         </div>
                     ))}
+
+                    {/* Add Row Button - moved below expense rows */}
+                    <button
+                        type="button"
+                        onClick={addExpenseRow}
+                        className="btn-primary btn-sm w-full"
+                        disabled={loading}
+                    >
+                        <PlusIcon className="h-4 w-4 mr-1" />
+                        Add Row
+                    </button>
                 </div>
 
                 {/* Submit Buttons */}

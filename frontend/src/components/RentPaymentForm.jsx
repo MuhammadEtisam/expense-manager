@@ -50,7 +50,7 @@ const RentPaymentForm = ({ isOpen, onClose, onSuccess }) => {
         const maxDate = new Date(dateRange.max)
 
         if (selectedDate < minDate || selectedDate > maxDate) {
-            setError('Date must be in the current month and not in the future')
+            setError('Date must be within the current month (1st of month to today)')
             return false
         }
 
@@ -67,7 +67,7 @@ const RentPaymentForm = ({ isOpen, onClose, onSuccess }) => {
 
         try {
             const data = {
-                amount: parseFloat(formData.amount),
+                amount: Math.round(parseFloat(formData.amount) * 100) / 100,
                 date: formData.date,
                 note: formData.note.trim() || null
             }
