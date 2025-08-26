@@ -2,10 +2,13 @@
 
 All notable changes to **Expense Manager** will be documented here.  
 
-## v1.1.1 - 2025-08-26
-- Fixed: “Add row” button placement (moved below expense rows for easier access).
-- Fixed: Amount rounding issue (values like 40 were stored as 39.99).
-- Fixed: Rent date picker allowed last day of previous month (31 July) — now restricted to current month.
+## [v1.1.1] - 2025-08-26
+### 🐞 Fixes
+- Fixed: “Add row” button placement (moved below expense rows for easier access).  
+- Fixed: Amount rounding issue (values like 40 were stored as 39.99).  
+- Fixed: Rent date picker allowed last day of previous month (31 July) — now restricted to current month.  
+
+---
 
 ## [v1.1] - 2025-08-26
 ### ✨ New Features
