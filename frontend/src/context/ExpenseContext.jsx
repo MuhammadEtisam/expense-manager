@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback } from 'react'
-import { api } from '../utils/api'
+import { expenseAPI } from '../utils/api'
 
 const ExpenseContext = createContext()
 
@@ -20,15 +20,7 @@ export const ExpenseProvider = ({ children }) => {
     const fetchExpenses = useCallback(async (filters = {}) => {
         setLoading(true)
         try {
-            const params = new URLSearchParams()
-
-            if (filters.from) params.append('from', filters.from)
-            if (filters.to) params.append('to', filters.to)
-            if (filters.category) params.append('category', filters.category)
-            if (filters.offset) params.append('offset', filters.offset.toString())
-            if (filters.limit) params.append('limit', filters.limit.toString())
-
-            const response = await api.get(`/v1/expenses?${params.toString()}`)
+            const response = await expenseAPI.getAll(filters)
 
             if (response.success) {
                 const { expenses: newExpenses, totals: newTotals, pagination: newPagination } = response.data
@@ -61,7 +53,7 @@ export const ExpenseProvider = ({ children }) => {
 
     const addExpense = async (expenseData) => {
         try {
-            const response = await api.post('/v1/expenses', expenseData)
+            const response = await expenseAPI.create(expenseData)
 
             if (response.success) {
                 // Add to the beginning of the list
@@ -84,9 +76,38 @@ export const ExpenseProvider = ({ children }) => {
         }
     }
 
+    const addMultipleExpenses = async (data) => {
+        try {
+            const response = await expenseAPI.createMultiple(data)
+
+            if (response.success) {
+                // Add all expenses to the beginning of the list
+                const newExpenses = response.data
+                setExpenses(prev => [...newExpenses, ...prev])
+
+                // Update totals
+                const totalAmount = newExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0)
+                setTotals(prev => ({
+                    amount: (parseFloat(prev.amount) + totalAmount).toFixed(2),
+                    count: prev.count + newExpenses.length
+                }))
+
+                return { success: true, data: newExpenses }
+            } else {
+                return { success: false, message: response.message }
+            }
+        } catch (error) {
+            console.error('Add multiple expenses error:', error)
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Failed to add expenses'
+            }
+        }
+    }
+
     const updateExpense = async (id, expenseData) => {
         try {
-            const response = await api.put(`/v1/expenses/${id}`, expenseData)
+            const response = await expenseAPI.update(id, expenseData)
 
             if (response.success) {
                 // Update in the list
@@ -116,7 +137,7 @@ export const ExpenseProvider = ({ children }) => {
 
     const deleteExpense = async (id) => {
         try {
-            const response = await api.delete(`/v1/expenses/${id}`)
+            const response = await expenseAPI.delete(id)
 
             if (response.success) {
                 const expenseToDelete = expenses.find(exp => exp.id === id)
@@ -152,6 +173,7 @@ export const ExpenseProvider = ({ children }) => {
         pagination,
         fetchExpenses,
         addExpense,
+        addMultipleExpenses,
         updateExpense,
         deleteExpense
     }

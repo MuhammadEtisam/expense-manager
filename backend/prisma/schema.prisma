@@ -20,19 +20,21 @@ model users_v1 {
 }
 
 model expenses {
-  id         String   @id @default(uuid())
-  owner      String
-  amount     Decimal  @db.Decimal(12, 2)
-  category   String
-  date       DateTime @db.Date
-  note       String?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id          String   @id @default(uuid())
+  owner       String
+  amount      Decimal  @db.Decimal(12, 2)
+  category    String
+  subcategory String?
+  date        DateTime @db.Date
+  note        String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 
   user users_v1 @relation(fields: [owner], references: [legacy_id], onDelete: Cascade)
 
   @@index([owner])
   @@index([date])
   @@index([category])
+  @@index([owner, date, category, subcategory])
   @@map("expenses")
 }

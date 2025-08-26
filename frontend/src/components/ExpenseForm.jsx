@@ -1,99 +1,187 @@
 import { useState, useEffect } from 'react'
-import { EXPENSE_CATEGORIES, validateExpenseForm } from '../utils/helpers'
-import { useExpenses } from '../context/ExpenseContext'
+import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { EXPENSE_CATEGORIES, FOOD_SUBCATEGORIES, validateExpenseForm } from '../utils/helpers'
+import { expenseAPI } from '../utils/api'
 import LoadingSpinner from './LoadingSpinner'
 import Alert from './Alert'
 import Modal from './Modal'
 
-const ExpenseForm = ({ isOpen, onClose, expense = null }) => {
-    const isEditing = !!expense
-    const [formData, setFormData] = useState({
+const ExpenseForm = ({ isOpen, onClose, onSuccess }) => {
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+    const [expenses, setExpenses] = useState([{
+        id: Date.now(),
         amount: '',
         category: '',
-        date: new Date().toISOString().split('T')[0],
+        subcategory: '',
         note: ''
-    })
-    const [errors, setErrors] = useState({})
+    }])
+    const [restrictions, setRestrictions] = useState({ unavailableFood: [], rentPaid: false })
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
+    const [dateChanged, setDateChanged] = useState(false)
 
-    const { addExpense, updateExpense } = useExpenses()
-
-    // Populate form when editing
+    // Load restrictions when date changes
     useEffect(() => {
-        if (expense && isOpen) {
-            setFormData({
-                amount: expense.amount.toString(),
-                category: expense.category,
-                date: expense.date.split('T')[0], // Convert to YYYY-MM-DD format
-                note: expense.note || ''
-            })
-        } else if (isOpen && !expense) {
-            // Reset form for new expense
-            setFormData({
-                amount: '',
-                category: '',
-                date: new Date().toISOString().split('T')[0],
-                note: ''
-            })
+        if (selectedDate && isOpen) {
+            loadRestrictions()
         }
-    }, [expense, isOpen])
+    }, [selectedDate, isOpen])
 
-    // Clear errors and form when modal closes
+    // Reset form when modal opens/closes
     useEffect(() => {
-        if (!isOpen) {
-            setErrors({})
-            setError('')
+        if (isOpen) {
+            resetForm()
         }
     }, [isOpen])
 
-    const handleChange = (e) => {
-        const { name, value } = e.target
-        setFormData(prev => ({ ...prev, [name]: value }))
-
-        // Clear specific field error when user starts typing
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: '' }))
+    const loadRestrictions = async () => {
+        try {
+            const response = await expenseAPI.getRestrictions(selectedDate)
+            setRestrictions(response.data)
+        } catch (error) {
+            console.error('Failed to load restrictions:', error)
+            setRestrictions({ unavailableFood: [], rentPaid: false })
         }
+    }
+
+    const resetForm = () => {
+        setExpenses([{
+            id: Date.now(),
+            amount: '',
+            category: '',
+            subcategory: '',
+            note: ''
+        }])
+        setError('')
+        setDateChanged(false)
+    }
+
+    const handleDateChange = (newDate) => {
+        if (newDate !== selectedDate && expenses.some(exp => exp.amount || exp.category || exp.note)) {
+            if (!confirm('Changing the date will reset entered expenses. Continue?')) {
+                return
+            }
+            resetForm()
+        }
+        setSelectedDate(newDate)
+        setDateChanged(true)
+    }
+
+    const addExpenseRow = () => {
+        setExpenses([...expenses, {
+            id: Date.now() + Math.random(),
+            amount: '',
+            category: '',
+            subcategory: '',
+            note: ''
+        }])
+    }
+
+    const removeExpenseRow = (id) => {
+        if (expenses.length > 1) {
+            setExpenses(expenses.filter(exp => exp.id !== id))
+        }
+    }
+
+    const updateExpense = (id, field, value) => {
+        setExpenses(expenses.map(exp => {
+            if (exp.id === id) {
+                const updated = { ...exp, [field]: value }
+
+                // Clear subcategory if category changes and is not FOOD
+                if (field === 'category' && value !== 'FOOD') {
+                    updated.subcategory = ''
+                }
+
+                return updated
+            }
+            return exp
+        }))
+
         if (error) setError('')
+    }
+
+    const getAvailableCategories = (currentExpenseId) => {
+        const usedCategories = expenses
+            .filter(exp => exp.id !== currentExpenseId && exp.category === 'RENT')
+            .map(exp => exp.category)
+
+        return EXPENSE_CATEGORIES.filter(cat => {
+            if (cat.value === 'RENT') {
+                // Check if rent is already paid or used in form
+                return !restrictions.rentPaid && !usedCategories.includes('RENT')
+            }
+            return true
+        })
+    }
+
+    const getAvailableSubcategories = (currentExpenseId) => {
+        const usedSubcategories = [...restrictions.unavailableFood]
+
+        // Add subcategories already used in current form
+        expenses.forEach(exp => {
+            if (exp.id !== currentExpenseId && exp.category === 'FOOD' && exp.subcategory) {
+                const subcategory = FOOD_SUBCATEGORIES.find(sub => sub.value === exp.subcategory)
+                if (subcategory && subcategory.restricted) {
+                    usedSubcategories.push(exp.subcategory)
+                }
+            }
+        })
+
+        return FOOD_SUBCATEGORIES.filter(sub => !usedSubcategories.includes(sub.value))
+    }
+
+    const validateForm = () => {
+        const validExpenses = expenses.filter(exp => exp.amount || exp.category || exp.note)
+
+        if (validExpenses.length === 0) {
+            setError('Please add at least one expense')
+            return false
+        }
+
+        // Validate each expense
+        for (const expense of validExpenses) {
+            const validation = validateExpenseForm({ ...expense, date: selectedDate })
+            if (!validation.isValid) {
+                const errorMessages = Object.values(validation.errors)
+                setError(`Error in expense: ${errorMessages[0]}`)
+                return false
+            }
+        }
+
+        return { validExpenses }
     }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
 
-        const validation = validateExpenseForm(formData)
-
-        if (!validation.isValid) {
-            setErrors(validation.errors)
-            return
-        }
+        const validation = validateForm()
+        if (!validation) return
 
         setLoading(true)
         setError('')
-        setErrors({})
 
         try {
-            const expenseData = {
-                amount: parseFloat(formData.amount),
-                category: formData.category,
-                date: formData.date,
-                note: formData.note.trim() || null
+            const data = {
+                date: selectedDate,
+                expenses: validation.validExpenses.map(exp => ({
+                    amount: parseFloat(exp.amount),
+                    category: exp.category,
+                    subcategory: exp.subcategory || null,
+                    note: exp.note.trim() || null
+                }))
             }
 
-            let result
-            if (isEditing) {
-                result = await updateExpense(expense.id, expenseData)
-            } else {
-                result = await addExpense(expenseData)
-            }
+            const response = await expenseAPI.createMultiple(data)
 
-            if (result.success) {
+            if (response.success) {
+                onSuccess && onSuccess(response.data)
                 onClose()
             } else {
-                setError(result.message)
+                setError(response.message)
             }
         } catch (err) {
-            setError('An unexpected error occurred')
+            setError(err.response?.data?.message || 'Failed to create expenses')
         } finally {
             setLoading(false)
         }
@@ -103,9 +191,10 @@ const ExpenseForm = ({ isOpen, onClose, expense = null }) => {
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={isEditing ? 'Edit Expense' : 'Add New Expense'}
+            title="Add Expenses"
+            size="lg"
         >
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
                 {error && (
                     <Alert
                         type="error"
@@ -114,102 +203,144 @@ const ExpenseForm = ({ isOpen, onClose, expense = null }) => {
                     />
                 )}
 
-                <div>
-                    <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">
-                        Amount *
-                    </label>
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <span className="text-gray-500 sm:text-sm">$</span>
-                        </div>
-                        <input
-                            type="number"
-                            id="amount"
-                            name="amount"
-                            step="0.01"
-                            min="0"
-                            max="9999999999.99"
-                            value={formData.amount}
-                            onChange={handleChange}
-                            className={`input pl-7 ${errors.amount ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
-                            placeholder="0.00"
-                            disabled={loading}
-                        />
-                    </div>
-                    {errors.amount && (
-                        <p className="mt-1 text-sm text-red-600">{errors.amount}</p>
-                    )}
-                </div>
-
-                <div>
-                    <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
-                        Category *
-                    </label>
-                    <select
-                        id="category"
-                        name="category"
-                        value={formData.category}
-                        onChange={handleChange}
-                        className={`select ${errors.category ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
-                        disabled={loading}
-                    >
-                        <option value="">Select a category</option>
-                        {EXPENSE_CATEGORIES.map(category => (
-                            <option key={category.value} value={category.value}>
-                                {category.label}
-                            </option>
-                        ))}
-                    </select>
-                    {errors.category && (
-                        <p className="mt-1 text-sm text-red-600">{errors.category}</p>
-                    )}
-                </div>
-
-                <div>
-                    <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
-                        Date *
+                {/* Date Selection - First Step */}
+                <div className="border-b border-gray-200 pb-4">
+                    <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Date *
                     </label>
                     <input
                         type="date"
                         id="date"
-                        name="date"
-                        value={formData.date}
-                        onChange={handleChange}
+                        value={selectedDate}
+                        onChange={(e) => handleDateChange(e.target.value)}
                         max={new Date().toISOString().split('T')[0]}
-                        className={`input ${errors.date ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
+                        className="input max-w-xs"
                         disabled={loading}
                     />
-                    {errors.date && (
-                        <p className="mt-1 text-sm text-red-600">{errors.date}</p>
-                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                        You must select a date before adding expenses
+                    </p>
                 </div>
 
-                <div>
-                    <label htmlFor="note" className="block text-sm font-medium text-gray-700 mb-1">
-                        Note
-                    </label>
-                    <textarea
-                        id="note"
-                        name="note"
-                        rows="3"
-                        value={formData.note}
-                        onChange={handleChange}
-                        className={`textarea ${errors.note ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
-                        placeholder="Optional note about this expense..."
-                        maxLength="500"
-                        disabled={loading}
-                    />
-                    <div className="mt-1 flex justify-between">
-                        {errors.note && (
-                            <p className="text-sm text-red-600">{errors.note}</p>
-                        )}
-                        <p className="text-xs text-gray-500 ml-auto">
-                            {formData.note.length}/500
-                        </p>
+                {/* Expenses List */}
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-medium text-gray-700">Expenses for {selectedDate}</h3>
+                        <button
+                            type="button"
+                            onClick={addExpenseRow}
+                            className="btn-primary btn-sm"
+                            disabled={loading}
+                        >
+                            <PlusIcon className="h-4 w-4 mr-1" />
+                            Add Row
+                        </button>
                     </div>
+
+                    {expenses.map((expense, index) => (
+                        <div key={expense.id} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-gray-600">Expense #{index + 1}</span>
+                                {expenses.length > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => removeExpenseRow(expense.id)}
+                                        className="text-red-600 hover:text-red-700"
+                                        disabled={loading}
+                                    >
+                                        <TrashIcon className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                {/* Amount */}
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                        Amount *
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <span className="text-gray-500 text-sm">₨</span>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={expense.amount}
+                                            onChange={(e) => updateExpense(expense.id, 'amount', e.target.value)}
+                                            className="input pl-8"
+                                            placeholder="0.00"
+                                            disabled={loading}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Category */}
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                        Category *
+                                    </label>
+                                    <select
+                                        value={expense.category}
+                                        onChange={(e) => updateExpense(expense.id, 'category', e.target.value)}
+                                        className="select"
+                                        disabled={loading}
+                                    >
+                                        <option value="">Select category</option>
+                                        {getAvailableCategories(expense.id).map(category => (
+                                            <option key={category.value} value={category.value}>
+                                                {category.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Food Subcategory */}
+                            {expense.category === 'FOOD' && (
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                        Food Type *
+                                    </label>
+                                    <select
+                                        value={expense.subcategory}
+                                        onChange={(e) => updateExpense(expense.id, 'subcategory', e.target.value)}
+                                        className="select"
+                                        disabled={loading}
+                                    >
+                                        <option value="">Select food type</option>
+                                        {getAvailableSubcategories(expense.id).map(sub => (
+                                            <option key={sub.value} value={sub.value} disabled={restrictions.unavailableFood.includes(sub.value)}>
+                                                {sub.label}
+                                                {restrictions.unavailableFood.includes(sub.value) && ' (Already taken)'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Note */}
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                    Note
+                                </label>
+                                <input
+                                    type="text"
+                                    value={expense.note}
+                                    onChange={(e) => updateExpense(expense.id, 'note', e.target.value)}
+                                    className="input"
+                                    placeholder="Optional note..."
+                                    maxLength="500"
+                                    disabled={loading}
+                                />
+                            </div>
+                        </div>
+                    ))}
                 </div>
 
-                <div className="flex gap-3 pt-4">
+                {/* Submit Buttons */}
+                <div className="flex gap-3 pt-4 border-t border-gray-200">
                     <button
                         type="submit"
                         disabled={loading}
@@ -218,10 +349,10 @@ const ExpenseForm = ({ isOpen, onClose, expense = null }) => {
                         {loading ? (
                             <>
                                 <LoadingSpinner size="sm" className="mr-2" />
-                                {isEditing ? 'Updating...' : 'Adding...'}
+                                Adding Expenses...
                             </>
                         ) : (
-                            isEditing ? 'Update Expense' : 'Add Expense'
+                            'Add Expenses'
                         )}
                     </button>
                     <button

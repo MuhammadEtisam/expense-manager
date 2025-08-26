@@ -65,3 +65,36 @@ class ApiClient {
 }
 
 export const api = new ApiClient()
+
+// Expense API methods
+export const expenseAPI = {
+    // Get all expenses with filters
+    getAll: (params = {}) => api.get('/v1/expenses', { params }),
+
+    // Create single expense
+    create: (data) => api.post('/v1/expenses', data),
+
+    // Create multiple expenses for a date
+    createMultiple: (data) => api.post('/v1/expenses/multiple', data),
+
+    // Update expense
+    update: (id, data) => api.put(`/v1/expenses/${id}`, data),
+
+    // Delete expense
+    delete: (id) => api.delete(`/v1/expenses/${id}`),
+
+    // Pay rent
+    payRent: (data) => api.post('/v1/expenses/pay-rent', data),
+
+    // Get rent status for current month
+    getRentStatus: () => api.get('/v1/expenses/rent-status'),
+
+    // Get restrictions for a specific date
+    getRestrictions: (date) => api.get(`/v1/expenses/restrictions/${date}`)
+}
+
+// Auth API methods  
+export const authAPI = {
+    register: (data) => api.post('/v1/auth/register', data),
+    login: (data) => api.post('/v1/auth/login', data)
+}

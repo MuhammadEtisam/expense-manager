@@ -16,6 +16,7 @@ const ExpenseItem = ({ expense, onEdit, onDelete }) => {
                     <div className="flex items-center gap-2 mb-1">
                         <span className={`badge badge-${categoryInfo.color}`}>
                             {categoryInfo.label}
+                            {expense.subcategory && ` - ${expense.subcategory.charAt(0) + expense.subcategory.slice(1).toLowerCase()}`}
                         </span>
                         <span className="text-sm text-gray-500">
                             {formatDate(expense.date)}

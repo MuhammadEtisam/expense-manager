@@ -7,12 +7,12 @@ export const formatDate = (date, pattern = 'MMM dd, yyyy') => {
     return format(dateObj, pattern)
 }
 
-export const formatCurrency = (amount, currency = 'USD') => {
+export const formatCurrency = (amount) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency,
-    }).format(numAmount)
+    return `₨ ${numAmount.toLocaleString('en-PK', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+    })}`
 }
 
 // Category helpers
@@ -22,6 +22,14 @@ export const EXPENSE_CATEGORIES = [
     { value: 'RENT', label: 'Rent', color: 'purple' },
     { value: 'MISC', label: 'Miscellaneous', color: 'gray' },
     { value: 'OTHER', label: 'Other', color: 'orange' },
+]
+
+export const FOOD_SUBCATEGORIES = [
+    { value: 'BREAKFAST', label: 'Breakfast', restricted: true },
+    { value: 'LUNCH', label: 'Lunch', restricted: true },
+    { value: 'DINNER', label: 'Dinner', restricted: true },
+    { value: 'TEA', label: 'Tea', restricted: false },
+    { value: 'OTHER', label: 'Other', restricted: false },
 ]
 
 export const getCategoryInfo = (category) => {
@@ -58,11 +66,14 @@ export const getDateRanges = () => {
 }
 
 // Rent reminder logic
-export const shouldShowRentReminder = () => {
+export const shouldShowRentReminder = (rentPaid = false) => {
     const now = new Date()
     const dayOfMonth = now.getDate()
     const currentMonth = now.getMonth()
     const currentYear = now.getFullYear()
+
+    // Don't show if rent is already paid for current month
+    if (rentPaid) return false
 
     // Only show after 5th of the month
     if (dayOfMonth <= 5) return false
@@ -114,6 +125,18 @@ export const checkHasRentThisMonth = (expenses) => {
     })
 }
 
+// Get current month date range for rent validation
+export const getCurrentMonthRange = () => {
+    const now = new Date()
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+    const today = new Date()
+
+    return {
+        min: firstDay.toISOString().split('T')[0],
+        max: today.toISOString().split('T')[0]
+    }
+}
+
 // Form validation helpers
 export const validateExpenseForm = (data) => {
     const errors = {}
@@ -124,6 +147,10 @@ export const validateExpenseForm = (data) => {
 
     if (!data.category) {
         errors.category = 'Category is required'
+    }
+
+    if (data.category === 'FOOD' && !data.subcategory) {
+        errors.subcategory = 'Food subcategory is required'
     }
 
     if (!data.date) {

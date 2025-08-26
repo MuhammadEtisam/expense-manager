@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ArrowRightOnRectangleIcon, HomeIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../context/AuthContext'
 import { useExpenses } from '../context/ExpenseContext'
-import { shouldShowRentReminder, checkHasRentThisMonth, clearExpiredData } from '../utils/helpers'
+import { shouldShowRentReminder, checkHasRentThisMonth, clearExpiredData, incrementLoginCount } from '../utils/helpers'
+import { expenseAPI } from '../utils/api'
 import ExpenseList from '../components/ExpenseList'
 import ExpenseForm from '../components/ExpenseForm'
+import EditExpenseForm from '../components/EditExpenseForm'
+import RentPaymentForm from '../components/RentPaymentForm'
 import ExpenseFilters from '../components/ExpenseFilters'
 import ExpenseTotals from '../components/ExpenseTotals'
 import RentBanner from '../components/RentBanner'
@@ -15,8 +18,10 @@ const DashboardPage = () => {
     const { expenses, loading, totals, pagination, fetchExpenses } = useExpenses()
 
     const [showExpenseForm, setShowExpenseForm] = useState(false)
+    const [showRentForm, setShowRentForm] = useState(false)
     const [editingExpense, setEditingExpense] = useState(null)
     const [showRentBanner, setShowRentBanner] = useState(false)
+    const [rentPaid, setRentPaid] = useState(false)
     const [filters, setFilters] = useState({
         from: null,
         to: null,
@@ -28,18 +33,38 @@ const DashboardPage = () => {
         // Clear expired localStorage data
         clearExpiredData()
 
-        // Load initial expenses
-        loadExpenses()
+        // Increment login count
+        incrementLoginCount()
+
+        // Load initial data
+        loadInitialData()
     }, [])
 
     useEffect(() => {
         // Check rent reminder after expenses are loaded
         if (!loading && expenses.length >= 0) {
             const hasRentThisMonth = checkHasRentThisMonth(expenses)
-            const shouldShow = shouldShowRentReminder() && !hasRentThisMonth
+            const shouldShow = shouldShowRentReminder(rentPaid) && !hasRentThisMonth
             setShowRentBanner(shouldShow)
         }
-    }, [expenses, loading])
+    }, [expenses, loading, rentPaid])
+
+    const loadInitialData = async () => {
+        try {
+            // Load expenses
+            await loadExpenses()
+
+            // Check rent status
+            const rentResponse = await expenseAPI.getRentStatus()
+            if (rentResponse.success) {
+                setRentPaid(rentResponse.data.paid)
+            }
+        } catch (error) {
+            console.error('Failed to load initial data:', error)
+        } finally {
+            setInitialLoading(false)
+        }
+    }
 
     const loadExpenses = async (newFilters = filters, append = false) => {
         const params = {
@@ -49,10 +74,6 @@ const DashboardPage = () => {
         }
 
         await fetchExpenses(params)
-
-        if (initialLoading) {
-            setInitialLoading(false)
-        }
     }
 
     const handleFiltersChange = (newFilters) => {
@@ -75,6 +96,18 @@ const DashboardPage = () => {
         setEditingExpense(null)
     }
 
+    const handleExpenseSuccess = () => {
+        // Refresh expenses after successful addition
+        loadExpenses(filters, false)
+    }
+
+    const handleRentPaid = () => {
+        setRentPaid(true)
+        setShowRentBanner(false)
+        // Refresh expenses to show the new rent entry
+        loadExpenses(filters, false)
+    }
+
     const handleLoadMore = () => {
         loadExpenses(filters, true)
     }
@@ -92,46 +125,54 @@ const DashboardPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Header */}
-            <header className="bg-white shadow-sm border-b border-gray-200">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex items-center justify-between h-16">
-                        <div>
-                            <h1 className="text-xl font-semibold text-gray-900">
-                                Expense Manager
-                            </h1>
-                            <p className="text-sm text-gray-600">
-                                Welcome back, {user?.userId}
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={handleAddExpense}
-                                className="btn-primary btn-md"
-                            >
-                                <PlusIcon className="h-4 w-4 mr-2" />
-                                Add Expense
-                            </button>
-                            <button
-                                onClick={handleLogout}
-                                className="btn-secondary btn-md"
-                                title="Sign out"
-                            >
-                                <ArrowRightOnRectangleIcon className="h-4 w-4 mr-2" />
-                                Sign Out
-                            </button>
-                        </div>
+        <div className="min-h-screen bg-gray-50 pt-20">
+            {/* User Info & Actions */}
+            <div className="max-w-4xl mx-auto px-4 mb-6">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="text-lg font-medium text-gray-900">
+                            Welcome back, {user?.userId}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                            Manage your expenses efficiently
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setShowRentForm(true)}
+                            className="btn-secondary btn-md"
+                            disabled={rentPaid}
+                        >
+                            <HomeIcon className="h-4 w-4 mr-2" />
+                            {rentPaid ? 'Rent Paid' : 'Pay Rent'}
+                        </button>
+                        <button
+                            onClick={handleAddExpense}
+                            className="btn-primary btn-md"
+                        >
+                            <PlusIcon className="h-4 w-4 mr-2" />
+                            Add Expenses
+                        </button>
+                        <button
+                            onClick={handleLogout}
+                            className="btn-secondary btn-md"
+                            title="Sign out"
+                        >
+                            <ArrowRightOnRectangleIcon className="h-4 w-4" />
+                        </button>
                     </div>
                 </div>
-            </header>
+            </div>
 
             {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main className="max-w-4xl mx-auto px-4">
                 <div className="space-y-6">
                     {/* Rent Banner */}
                     {showRentBanner && (
-                        <RentBanner onClose={() => setShowRentBanner(false)} />
+                        <RentBanner
+                            onClose={() => setShowRentBanner(false)}
+                            onRentPaid={handleRentPaid}
+                        />
                     )}
 
                     {/* Totals */}
@@ -173,11 +214,29 @@ const DashboardPage = () => {
                 </div>
             </main>
 
-            {/* Expense Form Modal */}
-            <ExpenseForm
-                isOpen={showExpenseForm}
-                onClose={handleCloseExpenseForm}
-                expense={editingExpense}
+            {/* Expense Form Modal - for adding new */}
+            {!editingExpense && (
+                <ExpenseForm
+                    isOpen={showExpenseForm}
+                    onClose={handleCloseExpenseForm}
+                    onSuccess={handleExpenseSuccess}
+                />
+            )}
+
+            {/* Edit Expense Form Modal - for editing existing */}
+            {editingExpense && (
+                <EditExpenseForm
+                    isOpen={showExpenseForm}
+                    onClose={handleCloseExpenseForm}
+                    expense={editingExpense}
+                />
+            )}
+
+            {/* Rent Payment Form Modal */}
+            <RentPaymentForm
+                isOpen={showRentForm}
+                onClose={() => setShowRentForm(false)}
+                onSuccess={handleRentPaid}
             />
         </div>
     )
